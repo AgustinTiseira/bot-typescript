@@ -1,6 +1,7 @@
 import BotWhatsapp from '@bot-whatsapp/bot';
 import { ChatCompletionMessageParam } from 'openai/resources';
 import { runGetInfo, test } from 'src/services/openai';
+import { chequearDisponibilidad } from './disponibilidad/disponibilidad.flow';
 
 
 export const reservarFlow = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAction(async (ctx, { flowDynamic, state, gotoFlow }) => {
@@ -12,22 +13,25 @@ export const reservarFlow = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).ad
         console.log("INFO", getInfo)
         const { hora, duracion, deporte, dia } = JSON.parse(getInfo)
         await state.update({ getInfo: JSON.parse(getInfo) })
-        if (hora === "unknown" || dia === "unknown") {
-            return gotoFlow(preguntaDiaYHoraFlow)
+        if (dia === "unknown") {
+            return gotoFlow(preguntarDiaFlow)
+
+        } else if (hora === "unknown") {
+            return gotoFlow(preguntarHoraFlow)
 
         } else if (deporte === "unknown") {
             return gotoFlow(preguntarDeporteFlow)
 
         }
         else {
-            console.log("INFO COMPLETA VER DISPONIBILIDAD", getInfo)
+            return gotoFlow(chequearDisponibilidad)
         }
     } catch (err) {
         console.log(`[ERROR]:`, err)
     }
 })
 
-export const preguntaDiaYHoraFlow = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAnswer("que dia y horario que te gustaria reservar?",
+export const preguntarDiaFlow = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAnswer("para que dia seria la reserva?",
     { capture: true }, async (ctx, { state, gotoFlow }) => {
 
         const newHistory = (state.getMyState()?.history ?? []) as ChatCompletionMessageParam[]
@@ -45,10 +49,35 @@ export const preguntaDiaYHoraFlow = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.AC
 
         const getInfo = await runGetInfo(newHistory)
         await state.update({ getInfo: JSON.parse(getInfo), history: newHistory })
-        console.log("FLOW PREGUNTAR HORA Y DIA", JSON.parse(getInfo))
+        console.log("FLOW PREGUNTAR DIA", JSON.parse(getInfo))
         return gotoFlow(reservarFlow)
 
     })
+
+
+export const preguntarHoraFlow = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAnswer("en que horario que te gustaria reservar?",
+    { capture: true }, async (ctx, { state, gotoFlow }) => {
+
+        const newHistory = (state.getMyState()?.history ?? []) as ChatCompletionMessageParam[]
+
+        newHistory.push({
+            role: 'assistant',
+            content: "en que horario que te gustaria reservar?"
+        })
+
+        newHistory.push({
+            role: 'user',
+            content: ctx.body
+        })
+
+
+        const getInfo = await runGetInfo(newHistory)
+        await state.update({ getInfo: JSON.parse(getInfo), history: newHistory })
+        console.log("FLOW PREGUNTAR HORA", JSON.parse(getInfo))
+        return gotoFlow(reservarFlow)
+
+    })
+
 
 export const preguntarDeporteFlow = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAnswer("Juegan Futbol o Padel?",
     { capture: true }, async (ctx, { state, gotoFlow }) => {

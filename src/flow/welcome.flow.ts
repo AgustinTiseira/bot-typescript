@@ -1,6 +1,6 @@
 import BotWhatsapp from '@bot-whatsapp/bot';
 import { ChatCompletionMessageParam } from 'openai/resources';
-import { run, runDetermine } from 'src/services/openai';
+import { run, runDetermine, runGetInfo } from 'src/services/openai';
 import { reservarFlow } from './reservar.flow';
 
 
@@ -18,12 +18,7 @@ export default BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.WELCOME)
             await state.update({ history: history })
 
             console.log(`[INTENCION]:`, ai.toLowerCase())
-
-            if (ai.toLowerCase().includes('unknown')) {
-                return
-            }
-
-            if (ai.toLowerCase().includes('reservar')) {
+            if (ai.toLowerCase() === "reservar") {
                 return gotoFlow(reservarFlow)
             }
 

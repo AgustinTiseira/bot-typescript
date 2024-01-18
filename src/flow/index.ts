@@ -1,6 +1,7 @@
 import BotWhatsapp from '@bot-whatsapp/bot';
 import welcomeFlow from './welcome.flow';
-import { preguntaDiaYHoraFlow, preguntarDeporteFlow, reservarFlow } from './reservar.flow';
+import { preguntarDiaFlow, preguntarDeporteFlow, reservarFlow, preguntarHoraFlow } from './reservar.flow';
+import { chequearDisponibilidad } from './disponibilidad/disponibilidad.flow';
 
 /**
  * Debes de implementasr todos los flujos
@@ -8,8 +9,10 @@ import { preguntaDiaYHoraFlow, preguntarDeporteFlow, reservarFlow } from './rese
 export default BotWhatsapp.createFlow(
     [
         welcomeFlow,
-        preguntaDiaYHoraFlow,
+        preguntarDiaFlow,
         preguntarDeporteFlow,
-        reservarFlow
+        reservarFlow,
+        preguntarHoraFlow,
+        chequearDisponibilidad
     ]
 )
