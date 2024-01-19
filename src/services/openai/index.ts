@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources";
-import { generatePrompt, generatePromptDetermine, generatePromptGetInfo } from "./prompt";
+import { generatePrompt, generatePromptDeterminarDecision, generatePromptDetermine, generatePromptGetInfo } from "./prompt";
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -83,9 +83,9 @@ export const runDetermine = async (history: ChatCompletionMessageParam[]): Promi
     }
 }
 
-export const test = async (history: ChatCompletionMessageParam[]): Promise<string> => {
+export const runDeterminarDesicion = async (history: ChatCompletionMessageParam[], mensaje: string): Promise<string> => {
     try {
-        const promtp = 'retorna un poema corto'
+        const promtp = generatePromptDeterminarDecision(mensaje)
         const response = await openai.chat.completions.create({
             model: "gpt-3.5-turbo",
             messages: [

@@ -1,25 +1,24 @@
 import BotWhatsapp from '@bot-whatsapp/bot';
 import { ChatCompletionMessageParam } from 'openai/resources';
-import { runGetInfo, test } from 'src/services/openai';
+import { runGetInfo, runDeterminarDesicion } from 'src/services/openai';
 import { chequearDisponibilidad } from './disponibilidad/disponibilidad.flow';
 
 
 export const reservarFlow = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAction(async (ctx, { flowDynamic, state, gotoFlow }) => {
     try {
         const history = (state.getMyState()?.history ?? []) as ChatCompletionMessageParam[]
-        console.log(await test(history))
         console.log("HISTORY en reserva", history)
         const getInfo = await runGetInfo(history)
         console.log("INFO", getInfo)
         const { hora, duracion, deporte, dia } = JSON.parse(getInfo)
         await state.update({ getInfo: JSON.parse(getInfo) })
-        if (dia === "unknown") {
+        if (dia === "unknown" || dia === "desconocido") {
             return gotoFlow(preguntarDiaFlow)
 
-        } else if (hora === "unknown") {
+        } else if (hora === "unknown" || hora === "desconocido") {
             return gotoFlow(preguntarHoraFlow)
 
-        } else if (deporte === "unknown") {
+        } else if (deporte === "unknown" || deporte === "desconocido") {
             return gotoFlow(preguntarDeporteFlow)
 
         }
