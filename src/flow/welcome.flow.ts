@@ -1,7 +1,7 @@
 import BotWhatsapp from '@bot-whatsapp/bot';
 import { ChatCompletionMessageParam } from 'openai/resources';
-import { run, runDetermine, runGetInfo } from 'src/services/openai';
 import { reservarFlow } from './reservar.flow';
+import { runDetermine, run } from 'src/services/openai';
 
 
 export default BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.WELCOME)

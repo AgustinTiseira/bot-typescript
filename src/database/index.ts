@@ -6,7 +6,6 @@ const MONGO_DB_URI =
 const MONGO_DB_NAME = "reservasbot";
 
 
-
 export default new MongoAdapter({
     dbUri: MONGO_DB_URI,
     dbName: MONGO_DB_NAME,

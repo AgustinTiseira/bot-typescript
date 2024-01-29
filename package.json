@@ -21,9 +21,8 @@
         "bot-ws-plugin-openai": "^1.0.6",
         "dotenv": "^16.3.1",
         "express": "^4.18.2",
+        "g4f": "^1.1.0",
         "luxon": "^3.4.4",
-        "mongodb": "4.1",
-        "mongoose": "^8.1.0",
         "openai": "^4.24.1",
         "paypal-rest-sdk": "^1.8.1",
         "wa-sticker-formatter": "4.3.2"
