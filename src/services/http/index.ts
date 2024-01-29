@@ -1,6 +1,7 @@
 import express from "express"
 import { createReadStream } from "fs"
 import { join } from "path"
+import mongoose from "mongoose"
 const app = express()
 
 const PORT = process.env?.PORT ?? 3000
@@ -10,28 +11,31 @@ const PORT = process.env?.PORT ?? 3000
  */
 const initServer = (botInstance: any) => {
 
-    app.get('/callback', (req, res) => {
-        const query = req.query
-        console.log(`[QUERY]:`, query)
+    const MONGO_DB_URI =
+        "mongodb+srv://Tisineitor:mk8QrbQJ5HE85mzE@reservasbot.qrmnl8y.mongodb.net/?retryWrites=true&w=majority" ||
+        "";
 
-        if (query && query?.status === 'fail') {
-            res.redirect(`https://app.codigoencasa.com`)
-            return
-        }
+    const option = {
+        maxPoolSize: 50,
+        wtimeoutMS: 2500
+    };
 
-        res.send(`Todo Ok`)
-    })
+    mongoose
+        .connect(MONGO_DB_URI, option)
+        .then(() => {
+            console.log("Established connection DB");
+        })
+        .catch((err) => {
+            console.error(err);
+        });
 
-    app.get("/qr", async (_, res) => {
-        const PATH_QR = join(process.cwd(), `bot.qr.png`);
-        const fileStream = createReadStream(PATH_QR);
-        res.writeHead(200, { "Content-Type": "image/png" });
-        fileStream.pipe(res);
-    });
-
-
+    /*     app.get('/callback', (req, res) => {
+            
+            res.send(`Todo Ok`)
+        })
+     */
     app.listen(PORT, () => {
-        console.log(`http://locahost:${PORT} listo!`)
+        console.log(`http://locahost:${PORT} ready!`)
     })
 }
 

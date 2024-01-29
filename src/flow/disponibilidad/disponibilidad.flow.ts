@@ -3,7 +3,8 @@ import { DateTime } from 'luxon';
 import { ChatCompletionMessageParam } from 'openai/resources';
 import { buscarHorariosDisponibles, haySuperposicion } from 'src/services/functions/chequearDisponibilidad';
 import { createEvent, getEvents } from 'src/services/functions/make';
-import { runDeterminarDesicion } from 'src/services/openai';
+import { createUser, findUser, updateEvents } from 'src/services/functions/mongo';
+import { runDeterminarDesicion, runDeterminarHorario } from 'src/services/openai';
 
 
 const convertirTiempoAMinutos = (tiempoString: string): number => {
@@ -56,12 +57,14 @@ export const chequearDisponibilidad = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.
         try {
             const newHistory = (state.getMyState()?.history ?? []) as ChatCompletionMessageParam[]
             const { dia, duracion, hora, deporte } = state.getMyState()?.getInfo
+            console.log(dia, duracion, hora, deporte)
             const events = await getEvents(dia)
+            console.log(events)
             const horaDeComienzo = DateTime.fromFormat(`${dia} ${hora}`, "dd-MM-yyyy h:mm a", { zone: "America/Argentina/Buenos_Aires" })
-            const noEstaDisponible = haySuperposicion(horaDeComienzo, horaDeComienzo.plus({ minutes: convertirTiempoAMinutos(duracion) }), convertirFormatoReservas(events))
+            const noEstaDisponible = haySuperposicion(horaDeComienzo, horaDeComienzo.plus({ minutes: convertirTiempoAMinutos(duracion) }), deporte, convertirFormatoReservas(events))
             if (noEstaDisponible) {
-                const msjs = buscarHorariosDisponibles(horaDeComienzo, convertirTiempoAMinutos(duracion), convertirFormatoReservas(events)).map((horario, index) => {
-                    return { body: `*${index + 1}*. ${horario}` }
+                const msjs = buscarHorariosDisponibles(horaDeComienzo, convertirTiempoAMinutos(duracion), deporte, convertirFormatoReservas(events)).map((horario, index) => {
+                    return { body: horario }
                 })
                 if (msjs.length === 0) {
                     newHistory.push({
@@ -70,6 +73,7 @@ export const chequearDisponibilidad = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.
                     })
 
                     await state.update({ history: newHistory })
+                    state.update({ history: [] })
                     return endFlow(`no hay horarios disponibles para el dia que me pediste ${(dia)}`)
                 }
                 await flowDynamic([{ body: "El horario que me pediste no esta disponible, te puedo ofrecer otro turno?" }, ...msjs.slice(0, 8)])
@@ -78,8 +82,8 @@ export const chequearDisponibilidad = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.
                     role: 'assistant',
                     content: "El horario que me pediste no esta disponible, te puedo ofrecer otro turno?"
                 })
-
-                await state.update({ history: newHistory, horariosDisponibles: msjs })
+                const horariosDisponibles = msjs.map(msj => msj.body)
+                await state.update({ history: newHistory, horariosDisponibles: horariosDisponibles })
                 return gotoFlow(ofrecerOtroHorario)
             } else {
                 await flowDynamic([{ body: "El horario que me pediste esta disponible" }, { body: `*DIA*: ${dia} \n*HORA*: ${hora} \n*DEPORTE*: ${deporte} \n*DURACION*: ${duracion}` }])
@@ -89,7 +93,7 @@ export const chequearDisponibilidad = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.
                     content: `El horario que me pediste esta disponible *DIA*: ${dia} \n*HORA*: ${hora} \n*DEPORTE*: ${deporte} \n*DURACION*: ${duracion}`
                 })
 
-                await state.update({ history: newHistory, getInfo: { ...state.getMyState()?.getInfo, dia: horaDeComienzo } })
+                await state.update({ history: newHistory })
                 return gotoFlow(confirmarReserva)
             }
         } catch (err) {
@@ -97,28 +101,36 @@ export const chequearDisponibilidad = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.
         }
     })
 
-export const ofrecerOtroHorario = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAnswer(["Te interesa algun horario? indicame el numero de la opcion que te interesa"],
-    { capture: true }, async (ctx, { state, gotoFlow, flowDynamic }) => {
+export const ofrecerOtroHorario = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAnswer(["Te sirve alguno? indicame el horario"],
+    { capture: true }, async (ctx, { state, gotoFlow }) => {
         // tomar la opcion que eligio el usuario
-        const selectedOption = state.getMyState().horariosDisponibles[+ctx.body - 1];
-        console.log(selectedOption)
-        // formatearlo a formato 12 horas
-        const selectedTime = DateTime.fromFormat(selectedOption.body.split(" ")[1], "H:mm", { zone: "America/Argentina/Buenos_Aires" });
-        const formattedTime = selectedTime.toFormat("h:mm a");
-
+        const history = (state.getMyState()?.history ?? []) as ChatCompletionMessageParam[]
+        const selectedOption = await runDeterminarHorario(history, ctx.body, state.getMyState().horariosDisponibles)
         // asignarlo a getInfo.hora
-        await state.update({ getInfo: { ...state.getMyState()?.getInfo, hora: formattedTime } })
+        await state.update({ getInfo: { ...state.getMyState()?.getInfo, hora: JSON.parse(selectedOption).horario } })
 
         // redirigir a chequearDisponibilidad
         return gotoFlow(chequearDisponibilidad);
     })
 
-export const confirmarReserva = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAnswer(["Te lo reservo? \n*SI* - *NO*"], { capture: true }, async (ctx, { state, gotoFlow, flowDynamic }) => {
-    const newHistory = (state.getMyState()?.history ?? []) as ChatCompletionMessageParam[]
+const convertirStringAJSON = (str: string) => {
+    const partes = str.split('\n');
+    const json = {
+        reservada: partes[0],
+        ID: partes[1],
+        summary: partes[2].split(':')[1].trim(),
+        start: DateTime.fromISO(partes[3].split(':')[1].trim()).minus({ hour: 3 }).setZone("America/Argentina/Buenos_Aires"),
+        end: DateTime.fromISO(partes[4].split(':')[1].trim()).minus({ hour: 3 }).setZone("America/Argentina/Buenos_Aires")
+    };
 
+    return json;
+}
+
+export const confirmarReserva = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION).addAnswer(["Te lo reservo?"], { capture: true }, async (ctx, { state, gotoFlow, provider, endFlow }) => {
+    const newHistory = (state.getMyState()?.history ?? []) as ChatCompletionMessageParam[]
     newHistory.push({
         role: 'assistant',
-        content: "Te lo reservo? \n*SI* - *NO*"
+        content: "Te lo reservo?"
     })
 
     newHistory.push({
@@ -128,14 +140,49 @@ export const confirmarReserva = BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.ACTION
 
     const ai = await runDeterminarDesicion(newHistory, ctx.body)
     if (ai.toLowerCase() === "reservar") {
-        console.log("RESERVA")
-        await createEvent({ ...state.getMyState()?.getInfo, telefono: ctx.from, nombre: ctx.pushName })
-    }
-    if (ai.toLowerCase() === "cancelar") {
-        console.log("CANCELAR")
-    }
-    if (ai.toLowerCase() === "espera") {
-        console.log("ESPERA")
+        const { dia, hora } = state.getMyState()?.getInfo
+        const horaDeComienzo = DateTime.fromFormat(`${dia} ${hora}`, "dd-MM-yyyy h:mm a", { zone: "America/Argentina/Buenos_Aires" })
+        const res = await createEvent({ ...state.getMyState()?.getInfo, dia: horaDeComienzo, telefono: ctx.from, nombre: ctx.pushName })
+        const json = convertirStringAJSON(res)
+        const user = await findUser(ctx.from)
+        if (user) {
+            await updateEvents(ctx.from, { ...state.getMyState()?.getInfo, ID: json.ID })
+        }
+        provider.sendText(
+            `${5491130207789}@c.us`, `NUEVA RESERVA
+            Dia pedido: ${state.getMyState()?.getInfo.dia}
+            Dia reservado: ${json.start.toFormat("dd-MM-yyyy")}
+            Hora pedida: ${state.getMyState()?.getInfo.hora}
+            Hora reservada: ${json.start.toFormat("h:mm a")}
+            Deporte: ${state.getMyState()?.getInfo.deporte}
+            Duración: ${state.getMyState()?.getInfo.duracion}
+            Nombre: ${ctx.pushName}
+            Tel: ${ctx.from}
+            Mira la reserva en el calendario https://calendar.google.com/`
+        )
+        state.update({ history: [] })
+
+        return endFlow(`Reserva realizada con exito 
+        Dia pedido: ${state.getMyState()?.getInfo.dia}
+        Dia reservado: ${json.start.toFormat("dd-MM-yyyy")}
+        Hora pedida: ${state.getMyState()?.getInfo.hora}
+        Hora reservada: ${json.start.toFormat("h:mm a")}
+        Deporte: ${state.getMyState()?.getInfo.deporte}
+        Duración: ${state.getMyState()?.getInfo.duracion}
+        Nombre: ${ctx.pushName}
+        Tel: ${ctx.from}`
+        )
     }
     await state.update({ history: newHistory })
+    if (ai.toLowerCase() === "cancelar") {
+        state.update({ history: [] })
+        return endFlow(`Entiendo, cancelamos la reserva`)
+
+    }
+    if (ai.toLowerCase() === "espera") {
+        state.update({ history: [] })
+        return endFlow(`No hay problema cuando sepas avisame`)
+    } else {
+        return gotoFlow(chequearDisponibilidad)
+    }
 })

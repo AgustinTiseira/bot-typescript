@@ -8,7 +8,7 @@ export default BotWhatsapp.addKeyword(BotWhatsapp.EVENTS.WELCOME)
     .addAction(async (ctx, { state, gotoFlow }) => {
         try {
             const history = (state.getMyState()?.history ?? []) as ChatCompletionMessageParam[]
-            const ai = await runDetermine(history)
+            const ai = await runDetermine(history, ctx.body)
 
             history.push({
                 role: 'user',

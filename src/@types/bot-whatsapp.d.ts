@@ -46,6 +46,7 @@ declare module "@bot-whatsapp/bot" {
     fallBack: (message?: string) => void;
     state: BotState;
     extensions: any;
+    provider: any;
   };
 
   // Función de devolución de llamada del bot
