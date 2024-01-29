@@ -11,8 +11,6 @@ import { initServer } from "./services/http";
 const main = async () => {
 
 
-    const botFLow = BotWhatsapp.addKeyword('hola').addAnswer('Buenas!') as any
-
     const botInstance = await BotWhatsapp.createBot({
         database,
         provider,
